@@ -15,6 +15,7 @@ Copyright::
     +===================================================+
 
 """
+
 from collections import namedtuple
 from typing import List, Dict
 
@@ -48,7 +49,7 @@ mail_domain = env('MAIL_DOMAIN', '')
 mail_log_path = env('MAIL_LOG_PATH', '/var/log')
 mail_log_filename = env('MAIL_LOG_FILENAME', 'mail.log')
 
-mail_log = mail_log_path+'/'+mail_log_filename
+mail_log = f'{mail_log_path}/{mail_log_filename}'
 
 admin_pass = env('ADMIN_PASS', 'SetThis!InYourEnv')
 secret_key = env('SECRET_KEY', 'SetThis!InYourEnv')

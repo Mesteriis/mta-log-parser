@@ -44,7 +44,7 @@ class APIException(MyAppException):
     def __init__(self, error_code="UNKNOWN_ERROR", message: str = None, status: int = None, template: str = None, extra: dict = None):
         from .core import _get_error
         _err = _get_error(error_code)
-        super().__init__(error_code + ' ' + empty_if(message, _err.message))
+        super().__init__(f'{error_code} {empty_if(message, _err.message)}')
         self.message = message
         self.error_code = error_code
         self.status = empty_if(status, _err.status, zero=True)

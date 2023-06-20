@@ -15,6 +15,7 @@ Copyright::
     +===================================================+
 
 """
+
 import asyncio
 import logging
 import re
@@ -37,25 +38,25 @@ log = logging.getLogger(__name__)
 global VERSION
 VERSION ="1.1.3"
 
-# postfix regexp
-postf_match = r'([A-Za-z]+[ \t]+[0-9]+[ \t]+[0-9]+\:[0-9]+:[0-9]+).*'
 """(0) Regex to match the Date/Time at the start of each log line"""
-postf_match += r'([A-F0-9]{11})\:[ \t]+?(.*)'
+postf_match = (
+    r'([A-Za-z]+[ \t]+[0-9]+[ \t]+[0-9]+\:[0-9]+:[0-9]+).*'
+    + r'([A-F0-9]{11})\:[ \t]+?(.*)'
+)
 """Regex to match the (1) Queue ID and the (2) Log Message"""
 
-# exim regexp (for syslog and separate mainlog)
-exim_match = r'([A-Za-z]+[ \t]+[0-9]+[ \t]+[0-9]+\:[0-9]+:[0-9]+|\d{4}-\d{2}-\d{2}.\d{2}\:\d{2}\:\d{2}).*'
 """(0) Regex to match the Date/Time at the start of each log line"""
-#exim_match += r'([A-Za-z]+[ \t]+[0-9]+[ \t]+[0-9]+\:[0-9]+:[0-9]+|\d{4}-\d{2}-\d{2}.\d{2}\:\d{2}\:\d{2}.([0-9A-Za-z]{6}-[0-9A-Za-z]{6}-[0-9A-Za-z]{2}).(.+)'
-#exim_match += r'([0-9A-Za-z]{6}-[0-9A-Za-z]{6}-[0-9A-Za-z]{2}).(.+)'
-exim_match += r'([0-9A-Za-z]{6}-[0-9A-Za-z]{6}-[0-9A-Za-z]{2}).(.+)'
+exim_match = (
+    r'([A-Za-z]+[ \t]+[0-9]+[ \t]+[0-9]+\:[0-9]+:[0-9]+|\d{4}-\d{2}-\d{2}.\d{2}\:\d{2}\:\d{2}).*'
+    + r'([0-9A-Za-z]{6}-[0-9A-Za-z]{6}-[0-9A-Za-z]{2}).(.+)'
+)
 """Regex to match the (1) Message ID and the (2) Log Message"""
 
-# sendmail regexp
-sendm_match = r'([A-Za-z]+[ \t]+[0-9]+[ \t]+[0-9]+\:[0-9]+:[0-9]+).*'
 """(0) Regex to match the Date/Time at the start of each log line"""
-#sendm_match += r'([0-9A-Za-z]{14})\:[ \t]+?(.*)'
-sendm_match += r'\:\s([0-9A-Za-z]+)\:[ \t]+?(.*)'
+sendm_match = (
+    r'([A-Za-z]+[ \t]+[0-9]+[ \t]+[0-9]+\:[0-9]+:[0-9]+).*'
+    + r'\:\s([0-9A-Za-z]+)\:[ \t]+?(.*)'
+)
 """Regex to match the (1) Queue ID and the (2) Log Message"""
 if settings.mta == '': settings.mta = 'postfix'
 
@@ -105,7 +106,6 @@ async def housekeeping(housekeeping_days):
     d = timedelta(days = housekeeping_days)
     a = (tod - d).replace(tzinfo=timezone.utc)
     log.info('According to the configured housekeeping days variable there will be deleted all logs before %s', a)
-    result = {}
     log.info('Making DB cleanup query')
     r, conn, r_q = await get_rethink()
     r_q: rethinkdb.query
@@ -115,24 +115,18 @@ async def housekeeping(housekeeping_days):
 
     #print (_sm)
     #print (_sm['deleted'])
-    
+
     """sm = []
     if type(_sm) is list:
         sm = list(_sm)
     else:
         async for s in _sm:
             sm.append(dict(s))"""
-    
 
-    
-    #result['deleted'] = len(sm)
-    result['deleted'] = _sm['deleted']
 
-    if result['deleted'] != 0:
-        result['status'] = 'true'
-    else:
-        result['status'] = 'false'
 
+    result = {'deleted': _sm['deleted']}
+    result['status'] = 'true' if result['deleted'] != 0 else 'false'
     return result
 
 async def import_log(logfile: str) -> Dict[str, PostfixMessage]:
@@ -154,20 +148,13 @@ async def import_log(logfile: str) -> Dict[str, PostfixMessage]:
             """Mar 13 10:57:04
             dtime = datetime.strptime(dtime, '%b %d %H:%M:%S').replace(year=datetime.today().year).strftime('%d.%m.%Y-%H:%M:%S')
             print("New time stamp: "+ dtime)"""
-            #print("m.groups[1]: ",m.groups()[1])# - queue_id
-            #print("m.groups[2]: ",m.groups()[2])# - message
-            # merge multiple mail_to strings into one for the one queue_id
-
-                #m['mail_to'] += ", "+recipients
-                #print("mail_to: ",m['mail_to'])
-                
             if qid not in messages:
                 messages[qid] = PostfixMessage(timestamp=dtime, queue_id=qid)
             messages[qid].merge(await parse_line(msg))
 
-            cheking_mailto = messages[qid]['mail_to']
             if qid not in set(multiple_recipients):
                 if qid == same_qid or same_qid=='':
+                    cheking_mailto = messages[qid]['mail_to']
                     if messages[qid]['status'].get('code') is not None:
                         # check if there are already recipients in message
                         #print("Looking for ",cheking_mailto," in message '",msg, "' related to qid ", qid)
@@ -184,46 +171,40 @@ async def import_log(logfile: str) -> Dict[str, PostfixMessage]:
 
             #print(await parse_line(msg[1]))
             messages[qid].lines.append(PostfixLog(timestamp=dtime, queue_id=qid, message=msg))
-            
+
     #print(multiple_recipients)
     #print(messages)
     log.info('Finished parsing log file %s', logfile)
-    output = dict();
-    output['messages'] = messages
-    output['multiple_recipients'] = multiple_recipients
-    return output
+    return {'messages': messages, 'multiple_recipients': multiple_recipients}
 
 """ samoilov subject decoder fixed"""
 #pat2=re.compile(r'(([^=]*)=\?([^\?]*)\?([BbQq])\?([^\?]*)\?=([^=]*))',re.IGNORECASE)
 pat2=re.compile(r'(([^=]*)=\?([^\?]*)\?([BbQq])\?([^\?]*)([^=]*))',re.IGNORECASE)
 
 def decodev2(a):
-    data=pat2.findall(a)
+    if not (data := pat2.findall(a)):
+        return a
     line=[]
-    if data:
-            for g in data:
-                    (raw,extra1,encoding,method,string,extra)=g
-                    extra1=extra1.replace('\r','').replace('\n','').strip()
-                    if len(extra1)>0:
-                            line.append(extra1)
-                    if method.lower()=='q':
-                            string=quopri.decodestring(string)
-                            """string=string.replace("_"," ").strip()"""
-                    if method.lower()=='b':
-                            # samoilov fix of padding errors
-                            #string=base64.b64decode(string)
-                            #check_dupl = string.split('UTF-8')
-                            #log.info(check_dupl)
-                            string = f"{string}{'=' * (len(string) % 4)}"
-                            string = base64.b64decode(string)
-                    line.append(string.decode(encoding,errors='ignore'))
-                    extra=extra.replace('\r','').replace('\n','').strip()
-                    if len(extra)>0:
-                            line.append(extra)
-            return "".join(line)
-
-    else:
-            return a
+    for g in data:
+            (raw,extra1,encoding,method,string,extra)=g
+            extra1=extra1.replace('\r','').replace('\n','').strip()
+            if len(extra1)>0:
+                    line.append(extra1)
+            if method.lower()=='q':
+                    string=quopri.decodestring(string)
+                    """string=string.replace("_"," ").strip()"""
+            if method.lower()=='b':
+                    # samoilov fix of padding errors
+                    #string=base64.b64decode(string)
+                    #check_dupl = string.split('UTF-8')
+                    #log.info(check_dupl)
+                    string = f"{string}{'=' * (len(string) % 4)}"
+                    string = base64.b64decode(string)
+            line.append(string.decode(encoding,errors='ignore'))
+            extra=extra.replace('\r','').replace('\n','').strip()
+            if len(extra)>0:
+                    line.append(extra)
+    return "".join(line)
 
 #async def check_recipient(qid,mailto):
 #    log.info('Checking %s in message %s', mailto, qid)
@@ -261,16 +242,15 @@ async def main():
     for m in msg_list:
         try:
             # check and process status
-            if m['status'] != {}:                
-                if m['status']['code'] not in ['sent','reject','deferred','bounced','multiple']:
-                    if m['status']['message'] == '':
-                        m['status']['message'] == 'no status message found'
-                    else:
-                        m['status']['message'] = m['status']['code'] + m['status']['message']
-                    m['status']['code'] = "unknown"
-            else:
+            if m['status'] == {}:
                 m['status']['code'] = "unknown"
                 m['status']['message'] = "no status message found"
+            elif m['status']['code'] not in ['sent','reject','deferred','bounced','multiple']:
+                if m['status']['message'] == '':
+                    m['status']['message'] == 'no status message found'
+                else:
+                    m['status']['message'] = m['status']['code'] + m['status']['message']
+                m['status']['code'] = "unknown"
             """subject decoder"""
             try:
                 m['subject'] = decodev2(m.get('subject'))
@@ -279,20 +259,13 @@ async def main():
             mfrom, mto = m.get('mail_from'), m.get('mail_to')
             """samoilov to fix index out of range error"""
 
-            if mfrom != '':
-                if '<>' not in mfrom:
-                    if '@' in mfrom:
-                        mfrom_dom = mfrom.split('@')[1]
-                    else:
-                        mfrom_dom = ''
-            else:
+            if mfrom == '':
                 mfrom_dom = mfrom
-            
+
+            elif '<>' not in mfrom:
+                mfrom_dom = mfrom.split('@')[1] if '@' in mfrom else ''
             if mto != '':
-                if '@' in mfrom:
-                    mto_dom = mto.split('@')[1]
-                else:
-                    mto_dom = ''
+                mto_dom = mto.split('@')[1] if '@' in mfrom else ''
             else:
                 mto_dom = mto
 

@@ -15,6 +15,7 @@ Copyright::
     +===================================================+
 
 """
+
 import re
 from mlp import settings
 import logging
@@ -50,7 +51,7 @@ sendm_status = re.compile(r'.*stat=([a-zA-Z0-9-_.]+)(.*)?|.*(reject)=([0-9].*)')
 sendm_relay = re.compile(r'.*to=.*relay=(.*)\[(.*)\], dsn|.*to=.*relay=(.*), dsn')
 sendm_client = re.compile(r'.*from=.*relay=(.*)\[(.*)\]|.*from=.*relay=(.*)')
 
-if settings.mta == 'postfix' or settings.mta == '':
+if settings.mta in ['postfix', '']:
     find_to = postf_to
     find_from = postf_from
     find_subject = postf_subject
@@ -106,10 +107,11 @@ async def parse_line(mline) -> dict:
 
     if settings.mta == 'exim':
         if _relay is not None:
-            if _relay.group(1) is not None:
-                lm['relay'] = dict(host=_relay.group(1), ip="127.0.0.1")
-            else:
-                lm['relay'] = dict(host=_relay.group(2), ip=_relay.group(3))
+            lm['relay'] = (
+                dict(host=_relay.group(1), ip="127.0.0.1")
+                if _relay.group(1) is not None
+                else dict(host=_relay.group(2), ip=_relay.group(3))
+            )
         if _client is not None: lm['client'] = dict(host=_client.group(1), ip=_client.group(2))
         if _from is not None:
             if _from.group(1) is not None:
@@ -125,8 +127,8 @@ async def parse_line(mline) -> dict:
                 lm['status'] = dict(code=_status.group(5), message="")
             if _status.group(7) is not None:
                 lm['status'] = dict(code=_status.group(7), message="")
-            
-            if lm['status']['code'] == '=>' or lm['status']['code'] == '->':
+
+            if lm['status']['code'] in ['=>', '->']:
                 lm['status']['code'] = 'sent'
             elif lm['status']['code'] == 'rejected':
                 lm['status']['code'] = 'reject'
@@ -157,23 +159,25 @@ async def parse_line(mline) -> dict:
     elif settings.mta == 'sendmail':
         if _from is not None: lm['mail_from'] = _from.group(1)
         if _client is not None:
-            if _client.group(3) is not None:
-                lm['client'] = dict(host=_client.group(3), ip="unknown")
-            else:
-                lm['client'] = dict(host=_client.group(1), ip=_client.group(2))
+            lm['client'] = (
+                dict(host=_client.group(3), ip="unknown")
+                if _client.group(3) is not None
+                else dict(host=_client.group(1), ip=_client.group(2))
+            )
         if _relay is not None:
-            if _relay.group(3) is not None:
-                lm['relay'] = dict(host=_relay.group(3), ip="unknown")
-            else:
-                lm['relay'] = dict(host=_relay.group(1), ip=_relay.group(2))
-            #lm['relay'] = dict(host=_relay.group(1), ip=_relay.group(2))
+            lm['relay'] = (
+                dict(host=_relay.group(3), ip="unknown")
+                if _relay.group(3) is not None
+                else dict(host=_relay.group(1), ip=_relay.group(2))
+            )
+                    #lm['relay'] = dict(host=_relay.group(1), ip=_relay.group(2))
         if _status is not None:
             if _status.group(1) is not None: lm['status'] = dict(code=_status.group(1).lower(), message="")
             if _status.group(3) is not None: lm['status'] = dict(code=_status.group(3).lower(), message="")
             if _status.group(2) is not None: lm['status']['message'] = _status.group(2)
             if _status.group(4) is not None: lm['status']['message'] = _status.group(4)
             #print("_status: ",lm['status'])
-    
+
 
         """if _status.group(9) is not None:
             lm['status'] = dict(code=_status.group(9), message="")"""
@@ -183,7 +187,7 @@ async def parse_line(mline) -> dict:
 
 
         """if len(_status.groups()) > 1:"""
-        
+
         """if _status.group(10) is not None:
             lm['status']['message'] = _status.group(10)"""
 
