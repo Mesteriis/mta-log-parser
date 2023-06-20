@@ -15,6 +15,7 @@ Copyright::
     +===================================================+
 
 """
+
 import json
 from dataclasses import dataclass, field
 from typing import List, Union, Mapping, Tuple
@@ -42,7 +43,7 @@ app = Quart(__name__)
 
 # add path prefix
 PREFIX = settings.path_prefix
-new_static_path = PREFIX+"/static"
+new_static_path = f"{PREFIX}/static"
 app.static_url_path = new_static_path
 
 '''for rule in app.url_map.iter_rules('static'):
@@ -176,7 +177,7 @@ async def api_emails():
     order_by = str(frm.pop('order', 'last_attempt')).lower()
     order_dir = str(frm.pop('order_dir', 'desc')).lower()
     #print(request)
-    
+
 
     _sm = r.table('sent_mail')
 
@@ -186,8 +187,7 @@ async def api_emails():
         recipient_match = ''
         if settings.mta == 'exim':
             recipient_match = "-> |=> |== |>> "
-            #recipient_match = "->|=>|==|>> "
-        if settings.mta == 'sendmail':
+        elif settings.mta == 'sendmail':
             recipient_match = "to="
         found_strings = await _sm.concat_map(lambda m: m['lines']).filter(lambda m: m['message'].match(recipient_match)).filter(lambda m: m['message'].match(search_string)).run(conn)
         ids = []
@@ -204,7 +204,7 @@ async def api_emails():
         async for f in found_strings:
             ids.append(f['queue_id'])
         _sm = _sm.filter(lambda doc: r_q.expr(ids).contains(doc['queue_id']))
-        
+
     # Handle appending .filter() to `_sm` for each filter key in `frm`
     _sm = await _process_filters(query=_sm, frm=frm)
 
@@ -217,7 +217,7 @@ async def api_emails():
     else:
         async for s in _sm:
             sm.append(dict(s))
-    
+
     res.result = sm
 
     return jsonify(res.to_json_dict())
@@ -230,7 +230,7 @@ async def _paginate_query(query: QueryOrTable, frm: Mapping, rt_conn: DefaultCon
 
     if not empty(page, True, True):
         offset = limit * (page - 1)
-    offset = 0 if offset < 0 else offset
+    offset = max(offset, 0)
     res = PageResult(error=False, count=0, remaining=0, page=1 if not page else page, total_pages=1)
     # Get the total number of rows which match the requested filters
     count = await query.count().run(rt_conn)
@@ -238,16 +238,20 @@ async def _paginate_query(query: QueryOrTable, frm: Mapping, rt_conn: DefaultCon
 
     # rt_query: RqlTopLevelQuery
     r_order = order_by if order_dir == 'asc' else rt_query.desc(order_by)
-    limit = settings.default_limit if limit <= 0 else (settings.max_limit if limit > settings.max_limit else limit)
-    offset = (count - limit if (count - limit) > 0 else 0) if offset >= count else offset
+    limit = (
+        settings.default_limit
+        if limit <= 0
+        else min(limit, settings.max_limit)
+    )
+    offset = max(count - limit, 0) if offset >= count else offset
     page = int(offset / limit) + 1
     # fix of pagination wrong total_pages calc
     if (count % limit) == 0:
         total_pages = int(count / limit)
     else:
         total_pages = int(count / limit) + 1
-    total_pages = 1 if total_pages < 1 else total_pages
-    page = 1 if page < 1 else page
+    total_pages = max(total_pages, 1)
+    page = max(page, 1)
     res.count, res.remaining, res.page, res.total_pages = count, count - offset, page, total_pages
 
     query = query.order_by(r_order).skip(offset).limit(limit)
@@ -300,8 +304,6 @@ async def _filter_form_key(fkey: str, fval: str, query: QueryOrTable) -> QueryOr
     rval = fval.replace('*', '')  # fval but without asterisks
     query = query.filter(lambda m: m[fkey].match(rval))
     return query
-
-    return query.filter(lambda m: m[fkey] == fval)
 
 async def _process_notie():
     NOTIE_MESSAGE = ""

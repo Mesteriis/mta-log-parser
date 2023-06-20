@@ -111,12 +111,10 @@ async def extract_json(rq: request) -> Union[list, dict]:
 
     """
     try:
-        data = await rq.get_json(force=True)
-        return data
+        return await rq.get_json(force=True)
     except (json.decoder.JSONDecodeError, BadRequest) as e:
         log.debug('get_json failed, falling back to extracting from form keys')
-        data = list(rq.form.keys())
-        if len(data) >= 1:
+        if data := list(rq.form.keys()):
             return json.loads(data[0])
         raise e
 
@@ -156,8 +154,7 @@ def _get_error(code: str, fallback: str = 'UNKNOWN_ERROR') -> AppError:
     :return AppError err: An instance of an error in :class:`.AppError` form.
     """
     e = ERRORS.get(code, ERRORS.get(fallback))
-    if empty(e, True, True): return DEFAULT_ERR
-    return e
+    return DEFAULT_ERR if empty(e, True, True) else e
 
 
 def add_app_error(code: str, msg: str, status: int = 500) -> AppError:

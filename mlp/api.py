@@ -34,20 +34,20 @@ def error(error_code: str, msg: str, code: int = 400, extra: dict = None):
     :param dict extra:        Optionally specify a dictionary of extra key/value's to merge with the outputted JSON dict
     """
     res = error_dict(error_code, msg, extra=extra)
-    if code is None: return jsonify(res)
-    return jsonify(res), code
+    return jsonify(res) if code is None else (jsonify(res), code)
 
 
 def result_dict(res: Union[dict, list, str, int], count: int = None, total: int = None, extra: dict = None):
     extra = {} if not extra else dict(extra)
-    
+
     _res = dict(error=False)
     if count is None and isinstance(res, (list, set, tuple)):
         _res['count'] = len(res)
     elif count is not None:
-        _res['count'] = int(count)
-    
-    if total is not None: _res['total'] = int(total)
+        _res['count'] = count
+
+    if total is not None:
+        _res['total'] = total
     return {**_res, 'result': res, **extra}
 
 
